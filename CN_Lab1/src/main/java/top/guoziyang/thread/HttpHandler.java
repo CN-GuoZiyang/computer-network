@@ -49,6 +49,7 @@ public class HttpHandler implements Runnable {
             // 从host中解析出主机与端口
             String[] hostSplits = new String[2];
             try {
+                assert hostString != null;
                 hostSplits = hostString.split(":");
             } catch(Exception ignore) {
                 ;
@@ -81,12 +82,12 @@ public class HttpHandler implements Runnable {
             //缓存存在
             if(lastTime != null) {
                 System.out.println("缓存存在！");
-                String checkString = "GET " + url + " HTTP/1.1\r\n";
-                checkString += "Host: " + host + "\r\n";
+                String checkString = requestBuilder.toString().replace("\r\n\r\n", "\r\n");
                 checkString += "If-modified-since: " + lastTime + "\r\n\r\n";
                 toServerWriter.write(checkString.getBytes());
                 toServerWriter.flush();
                 String checkRes = LineReader.readLine(toServerReader);
+                assert checkRes != null;
                 if(checkRes.contains("Not Modified")) {
                     toClientWriter.write(cachePool.getContent(url).getBytes());
                     toClientWriter.flush();
