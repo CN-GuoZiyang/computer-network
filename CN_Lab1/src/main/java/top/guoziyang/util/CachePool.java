@@ -12,7 +12,7 @@ public class CachePool {
         return cachePool;
     }
 
-    private int CACHE_SIZE = 100;
+    private int CACHE_SIZE = 256;
 
     private List<String> cacheUrl = new ArrayList<>();
     private Map<String, byte[]> cacheContent = new HashMap<>();

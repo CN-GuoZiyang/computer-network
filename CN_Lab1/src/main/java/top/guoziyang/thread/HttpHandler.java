@@ -106,20 +106,18 @@ public class HttpHandler implements Runnable {
             byte[] content;
             //缓存存在
             if ((content = cachePool.getContent(url)) != null) {
-                System.out.println("缓存存在！");
+                System.out.println("缓存存在：" + url);
                 String contentStr = new String(ArrayUtils.subarray(content, 0, 1024));
                 String lastTime = contentStr.substring(contentStr.indexOf("Last-Modified") + 15, contentStr.indexOf("Last-Modified") + 44);
-                System.out.println(lastTime);
                 String checkString = "GET " + url + " HTTP/1.1\r\n";
                 checkString += "Host: " + host + "\r\n";
                 checkString += "If-modified-since: " + lastTime + "\r\n\r\n";
                 toServerWriter.write(checkString.getBytes());
                 toServerWriter.flush();
                 String checkRes = LineReader.readLine(toServerReader);
-                System.out.println(checkRes);
                 assert checkRes != null;
                 if (checkRes.contains("Not Modified")) {
-                    System.out.println("命中！");
+                    System.out.println("缓存命中：" + url);
                     toClientWriter.write(content);
                     toClientWriter.flush();
                     toClientWriter.close();
@@ -171,6 +169,7 @@ public class HttpHandler implements Runnable {
                 byte[] bytesArray = Bytes.toArray(bytes);
                 if (new String(bytesArray).contains("Last-Modified")) {
                     cachePool.addCache(url, bytesArray);
+                    System.out.println("缓存保存：" + url);
                 }
             }
 
