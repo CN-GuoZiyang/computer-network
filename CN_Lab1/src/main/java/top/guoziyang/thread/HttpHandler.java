@@ -5,6 +5,7 @@ import org.apache.commons.lang3.ArrayUtils;
 import top.guoziyang.util.CachePool;
 import top.guoziyang.util.Configuration;
 import top.guoziyang.util.LineReader;
+import top.guoziyang.util.TeapotUtil;
 
 import java.io.*;
 import java.net.Socket;
@@ -31,25 +32,30 @@ public class HttpHandler implements Runnable {
             String line;
             String hostString = null;
             String url = null;
-            while((line = LineReader.readLine(toClientReader)) != null) {
-                if(line.startsWith("GET")) {
+            while ((line = LineReader.readLine(toClientReader)) != null) {
+                if (line.startsWith("GET")) {
                     url = line.split(" ")[1];
                 }
-                if(line.startsWith("CONNECT")) {
+                if (line.startsWith("CONNECT")) {
                     return;
                 }
-                if(line.startsWith("Host")) {
+                if (line.startsWith("Host")) {
                     hostString = line.split(" ")[1];
                 }
                 requestBuilder.append(line).append("\r\n");
             }
             requestBuilder.append("\r\n");
+            if(url == null) {
+                toClientReader.close();
+                toClientWriter.close();
+                return;
+            }
             // 从host中解析出主机与端口
             String[] hostSplits = new String[2];
             try {
                 assert hostString != null;
                 hostSplits = hostString.split(":");
-            } catch(Exception ignore) {
+            } catch (Exception ignore) {
                 ;
             }
             String host = hostSplits[0];
@@ -57,12 +63,34 @@ public class HttpHandler implements Runnable {
 
             Configuration configuration = Configuration.getInstance();
 
-            if(configuration.getBlackHostSet().contains(host)) {
-                error304(toClientWriter);
+            switch (url) {
+                case "http://teapot.min.css/":
+                    TeapotUtil.teapotCss(toClientWriter);
+                    return;
+                case "http://teapot.min.js/":
+                    TeapotUtil.teapotJs(toClientWriter);
+                    return;
+                case "http://teapot.png/":
+                    TeapotUtil.teapotPng(toClientWriter);
+                    return;
+                case "http://logo.png/":
+                    TeapotUtil.teapotLogo(toClientWriter);
+                    return;
+                case "http://analytics.js/":
+                    TeapotUtil.analyticsJs(toClientWriter);
+                    return;
+            }
+
+            if (configuration.getBlackHostSet().contains(host)) {
+                if (url.contains("favicon.ico")) {
+                    TeapotUtil.faviconIco(toClientWriter);
+                    return;
+                }
+                TeapotUtil.error418(toClientWriter);
                 return;
             }
 
-            if(configuration.getGuideMap().containsKey(host)) {
+            if (configuration.getGuideMap().containsKey(host)) {
                 String guideHost = configuration.getGuideMap().get(host);
                 requestBuilder = new StringBuilder(requestBuilder.toString().replace(host, guideHost));
                 host = guideHost;
@@ -77,7 +105,7 @@ public class HttpHandler implements Runnable {
             CachePool cachePool = CachePool.getInstance();
             byte[] content;
             //缓存存在
-            if((content = cachePool.getContent(url)) != null) {
+            if ((content = cachePool.getContent(url)) != null) {
                 System.out.println("缓存存在！");
                 String contentStr = new String(ArrayUtils.subarray(content, 0, 1024));
                 String lastTime = contentStr.substring(contentStr.indexOf("Last-Modified") + 15, contentStr.indexOf("Last-Modified") + 44);
@@ -90,7 +118,7 @@ public class HttpHandler implements Runnable {
                 String checkRes = LineReader.readLine(toServerReader);
                 System.out.println(checkRes);
                 assert checkRes != null;
-                if(checkRes.contains("Not Modified")) {
+                if (checkRes.contains("Not Modified")) {
                     System.out.println("命中！");
                     toClientWriter.write(content);
                     toClientWriter.flush();
@@ -100,10 +128,10 @@ public class HttpHandler implements Runnable {
                     toClientWriter.write(checkRes.getBytes());
                     byte[] buffer = new byte[BUFSIZE];
                     int length;
-                    while (true){
-                        if((length = toServerReader.read(buffer)) > 0) {
+                    while (true) {
+                        if ((length = toServerReader.read(buffer)) > 0) {
                             toClientWriter.write(buffer, 0, length);
-                        } else if(length < 0) {
+                        } else if (length < 0) {
                             break;
                         }
                     }
@@ -125,11 +153,11 @@ public class HttpHandler implements Runnable {
                 ArrayList<Integer> lengthList = new ArrayList<>();
                 int length;
                 while (true) {
-                    if((length = toServerReader.read(buffer)) > 0) {
+                    if ((length = toServerReader.read(buffer)) > 0) {
                         toClientWriter.write(buffer, 0, length);
                         byteList.add(buffer.clone());
                         lengthList.add(length);
-                    } else if(length < 0) {
+                    } else if (length < 0) {
                         break;
                     }
                 }
@@ -137,28 +165,17 @@ public class HttpHandler implements Runnable {
                 toClientWriter.flush();
                 toClientWriter.close();
 
-                for(int i = 0; i < byteList.size(); i ++) {
+                for (int i = 0; i < byteList.size(); i++) {
                     bytes.addAll(Bytes.asList(ArrayUtils.subarray(byteList.get(i), 0, lengthList.get(i))));
                 }
                 byte[] bytesArray = Bytes.toArray(bytes);
-                if(new String(bytesArray).contains("Last-Modified")) {
+                if (new String(bytesArray).contains("Last-Modified")) {
                     cachePool.addCache(url, bytesArray);
                 }
             }
 
         } catch (IOException ignored) {
             ;
-        }
-    }
-
-    private void error304(OutputStream toClientWriter) {
-        String errorStr = "HTTP/1.1 403 Forbidden\r\n\r\n";
-        try {
-            toClientWriter.write(errorStr.getBytes());
-            toClientWriter.flush();
-            toClientWriter.close();
-        } catch (IOException e) {
-            e.printStackTrace();
         }
     }
 
