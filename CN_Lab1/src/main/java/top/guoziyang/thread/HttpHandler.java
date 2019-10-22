@@ -1,5 +1,7 @@
 package top.guoziyang.thread;
 
+import com.google.common.primitives.Bytes;
+import org.apache.commons.lang3.ArrayUtils;
 import top.guoziyang.util.CachePool;
 import top.guoziyang.util.Configuration;
 import top.guoziyang.util.LineReader;
@@ -12,6 +14,7 @@ public class HttpHandler implements Runnable {
 
     private Socket socketToClient;
     private Socket socketToServer;
+    private int BUFSIZE = 1024;
 
     public HttpHandler(Socket socket) {
         this.socketToClient = socket;
@@ -20,7 +23,6 @@ public class HttpHandler implements Runnable {
     @Override
     public void run() {
         try {
-            socketToClient.setSoTimeout(8000);
             InputStream toClientReader = socketToClient.getInputStream();
             OutputStream toClientWriter = socketToClient.getOutputStream();
             StringBuilder requestBuilder = new StringBuilder();
@@ -71,7 +73,6 @@ public class HttpHandler implements Runnable {
 
             // System.out.println("Socket to " + host + " port " + port);
             socketToServer = new Socket(host, port);
-            socketToServer.setSoTimeout(8000);
             // System.out.println("Socket established!");
             OutputStream toServerWriter = socketToServer.getOutputStream();
             InputStream toServerReader = socketToServer.getInputStream();
@@ -92,42 +93,50 @@ public class HttpHandler implements Runnable {
                     toClientWriter.write(cachePool.getContent(url));
                     toClientWriter.flush();
                 } else {
-                    new Thread(new ProxyHandler(toClientReader, toServerWriter)).start();
-                    int ch;
                     checkRes += "\r\n";
                     toClientWriter.write(checkRes.getBytes());
-                    while ((ch = toServerReader.read()) != -1) {
-                        toClientWriter.write(ch);
+                    byte[] buffer = new byte[BUFSIZE];
+                    int length;
+                    while (true){
+                        if((length = toServerReader.read(buffer)) > 0) {
+                            toClientWriter.write(buffer, 0, length);
+                        } else if(length < 0) {
+                            break;
+                        }
                     }
                     toClientWriter.flush();
                 }
             } else {
+                System.out.println("缓存不存在！");
                 // 根据主机与端口构建Socket
                 toServerWriter.write(requestBuilder.toString().getBytes());
                 toServerWriter.flush();
                 // System.out.println("Headers sent to Server!");
 
-                new Thread(new ProxyHandler(toClientReader, toServerWriter)).start();
+                // new Thread(new ProxyHandler(toClientReader, toServerWriter)).start();
 
-                int ch;
-                List<Byte> bytes = new ArrayList<>();
-                while ((ch = toServerReader.read()) != -1) {
-                    toClientWriter.write(ch);
-                    bytes.add((byte) ch);
+                byte[] buffer = new byte[BUFSIZE];
+                ArrayList<Byte> bytes = new ArrayList<>();
+                int length;
+                while (true) {
+                    if((length = toServerReader.read(buffer)) > 0) {
+                        toClientWriter.write(buffer, 0, length);
+                        bytes.addAll(Bytes.asList(ArrayUtils.subarray(buffer, 0, length)));
+                    } else if(length < 0) {
+                        break;
+                    }
                 }
                 toClientWriter.flush();
-                byte[] bytesArray = new byte[bytes.size()];
-                for(int i = 0; i < bytes.size(); i ++) {
-                    bytesArray[i] = bytes.get(i);
-                }
+
+                byte[] bytesArray = Bytes.toArray(bytes);
                 String byteString = new String(bytesArray);
                 int lmIndex = byteString.indexOf("Last-Modified");
+                System.out.println(lmIndex);
                 if(lmIndex != -1) {
                     String lmString = byteString.substring(lmIndex, lmIndex + 44);
                     String lmTime = lmString.substring(15);
                     cachePool.addCache(url, bytesArray, lmTime);
                 }
-                //System.out.println("Cache add: " + url);
             }
 
         } catch (IOException ignored) {
