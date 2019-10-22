@@ -12,13 +12,13 @@ public class CachePool {
         return cachePool;
     }
 
-    int CACHE_SIZE = 100;
+    private int CACHE_SIZE = 100;
 
-    List<String> cacheUrl = new ArrayList<>();
-    Map<String, String> cacheTime = new HashMap<>();
-    Map<String, String> cacheContent = new HashMap<>();
+    private List<String> cacheUrl = new ArrayList<>();
+    private Map<String, String> cacheTime = new HashMap<>();
+    private Map<String, byte[]> cacheContent = new HashMap<>();
 
-    public void addCache(String url, String content, String time) {
+    public void addCache(String url, byte[] content, String time) {
         if(cacheUrl.size() == CACHE_SIZE) {
             String firstUrl = cacheUrl.remove(0);
             cacheContent.remove(firstUrl);
@@ -33,7 +33,7 @@ public class CachePool {
         }
     }
 
-    public String getContent(String url) {
+    public byte[] getContent(String url) {
         return cacheContent.get(url);
     }
 

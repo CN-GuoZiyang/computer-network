@@ -6,17 +6,12 @@ import top.guoziyang.util.LineReader;
 
 import java.io.*;
 import java.net.Socket;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Locale;
-import java.util.TimeZone;
+import java.util.*;
 
 public class HttpHandler implements Runnable {
 
     private Socket socketToClient;
     private Socket socketToServer;
-
-    private SimpleDateFormat sdf = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss", Locale.ENGLISH);
 
     public HttpHandler(Socket socket) {
         this.socketToClient = socket;
@@ -25,6 +20,7 @@ public class HttpHandler implements Runnable {
     @Override
     public void run() {
         try {
+            socketToClient.setSoTimeout(8000);
             InputStream toClientReader = socketToClient.getInputStream();
             OutputStream toClientWriter = socketToClient.getOutputStream();
             StringBuilder requestBuilder = new StringBuilder();
@@ -73,25 +69,28 @@ public class HttpHandler implements Runnable {
             CachePool cachePool = CachePool.getInstance();
             String lastTime = cachePool.getTime(url);
 
-            System.out.println("Socket to " + host + " port " + port);
+            // System.out.println("Socket to " + host + " port " + port);
             socketToServer = new Socket(host, port);
-            System.out.println("Socket established!");
+            socketToServer.setSoTimeout(8000);
+            // System.out.println("Socket established!");
             OutputStream toServerWriter = socketToServer.getOutputStream();
             InputStream toServerReader = socketToServer.getInputStream();
 
             //缓存存在
             if(lastTime != null) {
                 System.out.println("缓存存在！");
-                String checkString = requestBuilder.toString().replace("\r\n\r\n", "\r\n");
+                String checkString = "GET " + url + " HTTP/1.1\r\n";
+                checkString += "Host: " + host + "\r\n";
                 checkString += "If-modified-since: " + lastTime + "\r\n\r\n";
                 toServerWriter.write(checkString.getBytes());
                 toServerWriter.flush();
                 String checkRes = LineReader.readLine(toServerReader);
+                System.out.println(checkRes);
                 assert checkRes != null;
                 if(checkRes.contains("Not Modified")) {
-                    toClientWriter.write(cachePool.getContent(url).getBytes());
+                    System.out.println("命中！");
+                    toClientWriter.write(cachePool.getContent(url));
                     toClientWriter.flush();
-                    System.out.println("HIT!!");
                 } else {
                     new Thread(new ProxyHandler(toClientReader, toServerWriter)).start();
                     int ch;
@@ -106,19 +105,29 @@ public class HttpHandler implements Runnable {
                 // 根据主机与端口构建Socket
                 toServerWriter.write(requestBuilder.toString().getBytes());
                 toServerWriter.flush();
-                System.out.println("Headers sent to Server!");
+                // System.out.println("Headers sent to Server!");
 
                 new Thread(new ProxyHandler(toClientReader, toServerWriter)).start();
 
                 int ch;
-                StringBuilder builder = new StringBuilder();
+                List<Byte> bytes = new ArrayList<>();
                 while ((ch = toServerReader.read()) != -1) {
                     toClientWriter.write(ch);
-                    builder.append((char)ch);
+                    bytes.add((byte) ch);
                 }
                 toClientWriter.flush();
-                sdf.setTimeZone(TimeZone.getTimeZone("GMT"));
-                cachePool.addCache(url, builder.toString(), sdf.format(new Date()) + " GMT");
+                byte[] bytesArray = new byte[bytes.size()];
+                for(int i = 0; i < bytes.size(); i ++) {
+                    bytesArray[i] = bytes.get(i);
+                }
+                String byteString = new String(bytesArray);
+                int lmIndex = byteString.indexOf("Last-Modified");
+                if(lmIndex != -1) {
+                    String lmString = byteString.substring(lmIndex, lmIndex + 44);
+                    String lmTime = lmString.substring(15);
+                    cachePool.addCache(url, bytesArray, lmTime);
+                }
+                //System.out.println("Cache add: " + url);
             }
 
         } catch (IOException ignored) {

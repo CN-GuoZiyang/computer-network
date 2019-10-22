@@ -22,7 +22,7 @@ public class ProxyHandler implements Runnable {
                 outputStream.write(ch);
             }
             outputStream.flush();
-            System.out.println("flush success!");
+            //System.out.println("flush success!");
         } catch (IOException ignore) {
             ;
         }
