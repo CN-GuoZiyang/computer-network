@@ -68,18 +68,20 @@ public class HttpHandler implements Runnable {
                 host = guideHost;
             }
 
-            CachePool cachePool = CachePool.getInstance();
-            String lastTime = cachePool.getTime(url);
-
             // System.out.println("Socket to " + host + " port " + port);
             socketToServer = new Socket(host, port);
             // System.out.println("Socket established!");
             OutputStream toServerWriter = socketToServer.getOutputStream();
             InputStream toServerReader = socketToServer.getInputStream();
 
+            CachePool cachePool = CachePool.getInstance();
+            byte[] content;
             //缓存存在
-            if(lastTime != null) {
+            if((content = cachePool.getContent(url)) != null) {
                 System.out.println("缓存存在！");
+                String contentStr = new String(ArrayUtils.subarray(content, 0, 1024));
+                String lastTime = contentStr.substring(contentStr.indexOf("Last-Modified") + 15, contentStr.indexOf("Last-Modified") + 44);
+                System.out.println(lastTime);
                 String checkString = "GET " + url + " HTTP/1.1\r\n";
                 checkString += "Host: " + host + "\r\n";
                 checkString += "If-modified-since: " + lastTime + "\r\n\r\n";
@@ -90,8 +92,9 @@ public class HttpHandler implements Runnable {
                 assert checkRes != null;
                 if(checkRes.contains("Not Modified")) {
                     System.out.println("命中！");
-                    toClientWriter.write(cachePool.getContent(url));
+                    toClientWriter.write(content);
                     toClientWriter.flush();
+                    toClientWriter.close();
                 } else {
                     checkRes += "\r\n";
                     toClientWriter.write(checkRes.getBytes());
@@ -105,9 +108,10 @@ public class HttpHandler implements Runnable {
                         }
                     }
                     toClientWriter.flush();
+                    toClientWriter.close();
                 }
             } else {
-                System.out.println("缓存不存在！");
+                // System.out.println("缓存不存在！");
                 // 根据主机与端口构建Socket
                 toServerWriter.write(requestBuilder.toString().getBytes());
                 toServerWriter.flush();
@@ -117,25 +121,28 @@ public class HttpHandler implements Runnable {
 
                 byte[] buffer = new byte[BUFSIZE];
                 ArrayList<Byte> bytes = new ArrayList<>();
+                ArrayList<byte[]> byteList = new ArrayList<>();
+                ArrayList<Integer> lengthList = new ArrayList<>();
                 int length;
                 while (true) {
                     if((length = toServerReader.read(buffer)) > 0) {
                         toClientWriter.write(buffer, 0, length);
-                        bytes.addAll(Bytes.asList(ArrayUtils.subarray(buffer, 0, length)));
+                        byteList.add(buffer.clone());
+                        lengthList.add(length);
                     } else if(length < 0) {
                         break;
                     }
                 }
-                toClientWriter.flush();
 
+                toClientWriter.flush();
+                toClientWriter.close();
+
+                for(int i = 0; i < byteList.size(); i ++) {
+                    bytes.addAll(Bytes.asList(ArrayUtils.subarray(byteList.get(i), 0, lengthList.get(i))));
+                }
                 byte[] bytesArray = Bytes.toArray(bytes);
-                String byteString = new String(bytesArray);
-                int lmIndex = byteString.indexOf("Last-Modified");
-                System.out.println(lmIndex);
-                if(lmIndex != -1) {
-                    String lmString = byteString.substring(lmIndex, lmIndex + 44);
-                    String lmTime = lmString.substring(15);
-                    cachePool.addCache(url, bytesArray, lmTime);
+                if(new String(bytesArray).contains("Last-Modified")) {
+                    cachePool.addCache(url, bytesArray);
                 }
             }
 
