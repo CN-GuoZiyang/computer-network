@@ -134,16 +134,13 @@ public class HttpHandler implements Runnable {
                     toClientWriter.close();
                 } else {
                     // 否则，继续读取服务器报文并转发
+                    System.out.println("缓存过期：" + url);
                     checkRes += "\r\n";
                     toClientWriter.write(checkRes.getBytes());
                     byte[] buffer = new byte[BUFSIZE];
                     int length;
-                    while (true) {
-                        if ((length = toServerReader.read(buffer)) > 0) {
-                            toClientWriter.write(buffer, 0, length);
-                        } else if (length < 0) {
-                            break;
-                        }
+                    while ((length = toServerReader.read(buffer)) >= 0) {
+                        toClientWriter.write(buffer, 0, length);
                     }
                     toClientWriter.flush();
                     toClientWriter.close();
@@ -159,14 +156,10 @@ public class HttpHandler implements Runnable {
                 ArrayList<Integer> lengthList = new ArrayList<>();
                 int length;
                 // 从服务器接收数据，并转发给客户端
-                while (true) {
-                    if ((length = toServerReader.read(buffer)) > 0) {
-                        toClientWriter.write(buffer, 0, length);
-                        byteList.add(buffer.clone());
-                        lengthList.add(length);
-                    } else if (length < 0) {
-                        break;
-                    }
+                while ((length = toServerReader.read(buffer)) >= 0) {
+                    toClientWriter.write(buffer, 0, length);
+                    byteList.add(buffer.clone());
+                    lengthList.add(length);
                 }
 
                 // 清空缓冲区（发送）并断开输出流
