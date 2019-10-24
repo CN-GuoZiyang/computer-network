@@ -6,16 +6,27 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
 
+/**
+ * 读取配置文件的工具类
+ *
+ * @author Ziyang Guo
+ */
 public class Utils {
 
     private static Configuration configuration = Configuration.getInstance();
 
+    /**
+     * 读取配置
+     */
     public static void readConfig() {
         readProperties();
         readWebFilter();
         readGuide();
     }
 
+    /**
+     * 读取properties配置文件
+     */
     private static void readProperties() {
         Properties properties = new Properties();
         try {
@@ -26,6 +37,9 @@ public class Utils {
         }
     }
 
+    /**
+     * 读取不允许访问的网站列表
+     */
     private static void readWebFilter() {
         Set<String> hostBlackHostSet = new HashSet<>();
         try(BufferedReader reader = new BufferedReader(new FileReader("host_filter.txt"));) {
@@ -39,6 +53,9 @@ public class Utils {
         configuration.setBlackHostSet(hostBlackHostSet);
     }
 
+    /**
+     * 读取钓鱼网站列表
+     */
     private static void readGuide() {
         Map<String, String> guideMap = new HashMap<>();
         try(BufferedReader reader = new BufferedReader(new FileReader("guide.txt"));) {

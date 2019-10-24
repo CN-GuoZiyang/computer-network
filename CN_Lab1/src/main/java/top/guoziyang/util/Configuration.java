@@ -5,6 +5,11 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * 配置文件类
+ *
+ * @author Ziyang Guo
+ */
 public class Configuration {
 
     private static Configuration configuration;
