@@ -20,8 +20,7 @@ public class HttpHandler implements Runnable {
 
     private Socket socketToClient;
     private Socket socketToServer;
-    private int BUFSIZE = 1024;
-
+    private static final int BUFFER_SIZE = 1024;
 
     public HttpHandler(Socket socket) {
         this.socketToClient = socket;
@@ -41,12 +40,8 @@ public class HttpHandler implements Runnable {
             String hostString = null;
             String url = null;
             while ((line = LineReader.readLine(toClientReader)) != null) {
-                if (line.startsWith("GET") || line.startsWith("POST")) {
+                if (line.startsWith("GET") || line.startsWith("POST") || line.startsWith("CONNECT")) {
                     url = line.split(" ")[1];
-                }
-                if (line.startsWith("CONNECT")) {
-                    // 如果CONNECT头（https），直接断开连接
-                    return;
                 }
                 if (line.startsWith("Host")) {
                     hostString = line.split(" ")[1];
@@ -54,28 +49,23 @@ public class HttpHandler implements Runnable {
                 requestBuilder.append(line).append("\r\n");
             }
             requestBuilder.append("\r\n");
-            if(url == null) {
+
+            if(url == null || hostString == null) {
                 toClientReader.close();
                 toClientWriter.close();
                 return;
             }
             // 从host中解析出主机
-            String[] hostSplits = new String[2];
-            try {
-                assert hostString != null;
-                hostSplits = hostString.split(":");
-            } catch (Exception ignore) {
-                ;
-            }
+            String[] hostSplits = hostString.split(":");
             String host = hostSplits[0];
-            // 端口直接固定为80
-            int port = 80;
+
+            // 获取服务器端口
+            int port = hostSplits.length == 1?80:443;
 
             // 检查是否是418页面的资源请求
             if(TeapotUtil.teapotResource(url, toClientWriter)) {
                 return;
             }
-
 
             // 拦截不允许访问的用户
             if(configuration.getBlockedUsers().contains(socketToClient.getInetAddress().getHostAddress())) {
@@ -83,6 +73,7 @@ public class HttpHandler implements Runnable {
                     TeapotUtil.faviconIco(toClientWriter);
                     return;
                 }
+                System.out.println("不允许的用户：" + socketToClient.getInetAddress().getHostAddress());
                 TeapotUtil.error418(toClientWriter, "未允许的用户访问");
                 return;
             }
@@ -93,6 +84,7 @@ public class HttpHandler implements Runnable {
                     TeapotUtil.faviconIco(toClientWriter);
                     return;
                 }
+                System.out.println("不允许的网站：" + host);
                 TeapotUtil.error418(toClientWriter, "未允许的网站访问");
                 return;
             }
@@ -100,14 +92,30 @@ public class HttpHandler implements Runnable {
             // 如果是被钓鱼host，修改头部信息中的地址
             if (configuration.getGuideMap().containsKey(host)) {
                 String guideHost = configuration.getGuideMap().get(host);
+                System.out.println("钓鱼：" + host + "\t引导至：" + guideHost);
                 requestBuilder = new StringBuilder(requestBuilder.toString().replace(host, guideHost));
+                url = url.replace(host, guideHost);
                 host = guideHost;
             }
 
             // 开启与远程服务器的会话，并打开输入输出流
             socketToServer = new Socket(host, port);
+            System.out.println("请求：" + url);
             OutputStream toServerWriter = socketToServer.getOutputStream();
             InputStream toServerReader = socketToServer.getInputStream();
+
+            // 由于HTTPS通信加密，无法获取请求的其他信息，于是直接转发流量
+            if(requestBuilder.toString().startsWith("CONNECT")) {
+                toClientWriter.write("HTTP/1.1 200 Connection Established\r\n\r\n".getBytes());
+                toClientWriter.flush();
+                new Thread(new ProxyPipe(toClientReader, toServerWriter)).start();
+                byte[] buffer = new byte[1024];
+                int length;
+                while((length = toServerReader.read(buffer)) >= 0) {
+                    toClientWriter.write(buffer, 0, length);
+                }
+                return;
+            }
 
             CachePool cachePool = CachePool.getInstance();
             byte[] content;
@@ -135,7 +143,7 @@ public class HttpHandler implements Runnable {
                     System.out.println("缓存过期：" + url);
                     checkRes += "\r\n";
                     toClientWriter.write(checkRes.getBytes());
-                    byte[] buffer = new byte[BUFSIZE];
+                    byte[] buffer = new byte[BUFFER_SIZE];
                     int length;
                     while ((length = toServerReader.read(buffer)) >= 0) {
                         toClientWriter.write(buffer, 0, length);
@@ -148,7 +156,7 @@ public class HttpHandler implements Runnable {
                 toServerWriter.write(requestBuilder.toString().getBytes());
                 toServerWriter.flush();
 
-                byte[] buffer = new byte[BUFSIZE];
+                byte[] buffer = new byte[BUFFER_SIZE];
                 ArrayList<Byte> bytes = new ArrayList<>();
                 ArrayList<byte[]> byteList = new ArrayList<>();
                 ArrayList<Integer> lengthList = new ArrayList<>();
@@ -176,9 +184,7 @@ public class HttpHandler implements Runnable {
                 }
             }
 
-        } catch (IOException ignored) {
-            ;
-        } finally {
+        } catch (IOException ignored) {} finally {
             // 关闭socket
             try {
                 if(socketToClient != null && !socketToClient.isClosed()) {
@@ -188,7 +194,6 @@ public class HttpHandler implements Runnable {
                     socketToServer.close();
                 }
             } catch (IOException ignored) {
-                ;
             }
         }
     }

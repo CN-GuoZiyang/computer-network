@@ -46,7 +46,7 @@ public class ConfigUtils {
         try(BufferedReader reader = new BufferedReader(new FileReader("host_filter.txt"));) {
             String line;
             while((line = reader.readLine()) != null) {
-                if(line.startsWith("//") || line.length() == 0) continue;
+                if(line.startsWith("//") || line.trim().length() == 0) continue;
                 hostBlackHostSet.add(line);
             }
         } catch (IOException e) {
@@ -60,10 +60,10 @@ public class ConfigUtils {
      */
     private static void readGuide() {
         Map<String, String> guideMap = new HashMap<>();
-        try(BufferedReader reader = new BufferedReader(new FileReader("guide.txt"));) {
+        try(BufferedReader reader = new BufferedReader(new FileReader("host_guide.txt"));) {
             String line;
             while((line = reader.readLine()) != null) {
-                if(line.startsWith("//") || line.length() == 0) continue;
+                if(line.startsWith("//") || line.trim().length() == 0) continue;
                 String[] splits = line.split(" ");
                 guideMap.put(splits[0], splits[1]);
             }
@@ -78,10 +78,10 @@ public class ConfigUtils {
      */
     private static void readBlockedUsers() {
         Set<String> blockedUsers = new HashSet<>();
-        try(BufferedReader reader = new BufferedReader(new FileReader("blocked_users.txt"));) {
+        try(BufferedReader reader = new BufferedReader(new FileReader("user_block.txt"));) {
             String line;
             while((line = reader.readLine()) != null) {
-                if(line.startsWith("//") || line.length() == 0) continue;
+                if(line.startsWith("//") || line.trim().length() == 0) continue;
                 blockedUsers.add(line);
             }
         } catch (IOException e) {
