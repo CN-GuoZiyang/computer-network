@@ -2,7 +2,7 @@ package top.guoziyang;
 
 import top.guoziyang.thread.HttpHandler;
 import top.guoziyang.util.Configuration;
-import top.guoziyang.util.Utils;
+import top.guoziyang.util.ConfigUtils;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -12,7 +12,7 @@ public class Main {
 
     public static void main(String[] args) {
         // 读取配置文件
-        Utils.readConfig();
+        ConfigUtils.readConfig();
         Configuration configuration = Configuration.getInstance();
         try {
             // 开启服务端Socket监听

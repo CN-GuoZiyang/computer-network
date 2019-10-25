@@ -11,7 +11,7 @@ import java.util.*;
  *
  * @author Ziyang Guo
  */
-public class Utils {
+public class ConfigUtils {
 
     private static Configuration configuration = Configuration.getInstance();
 
@@ -22,6 +22,7 @@ public class Utils {
         readProperties();
         readWebFilter();
         readGuide();
+        readBlockedUsers();
     }
 
     /**
@@ -45,6 +46,7 @@ public class Utils {
         try(BufferedReader reader = new BufferedReader(new FileReader("host_filter.txt"));) {
             String line;
             while((line = reader.readLine()) != null) {
+                if(line.startsWith("//") || line.length() == 0) continue;
                 hostBlackHostSet.add(line);
             }
         } catch (IOException e) {
@@ -61,6 +63,7 @@ public class Utils {
         try(BufferedReader reader = new BufferedReader(new FileReader("guide.txt"));) {
             String line;
             while((line = reader.readLine()) != null) {
+                if(line.startsWith("//") || line.length() == 0) continue;
                 String[] splits = line.split(" ");
                 guideMap.put(splits[0], splits[1]);
             }
@@ -68,6 +71,23 @@ public class Utils {
             e.printStackTrace();
         }
         configuration.setGuideMap(guideMap);
+    }
+
+    /**
+     * 读取不允许访问的用户列表
+     */
+    private static void readBlockedUsers() {
+        Set<String> blockedUsers = new HashSet<>();
+        try(BufferedReader reader = new BufferedReader(new FileReader("blocked_users.txt"));) {
+            String line;
+            while((line = reader.readLine()) != null) {
+                if(line.startsWith("//") || line.length() == 0) continue;
+                blockedUsers.add(line);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        configuration.setBlockedUsers(blockedUsers);
     }
 
 }

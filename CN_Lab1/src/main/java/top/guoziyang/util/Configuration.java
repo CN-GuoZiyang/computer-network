@@ -18,16 +18,16 @@ public class Configuration {
 
     private int serverPort;
     private Set<String> blackHostSet = new HashSet<>();
-
-    public Map<String, String> getGuideMap() {
-        return guideMap;
-    }
-
-    public void setGuideMap(Map<String, String> guideMap) {
-        this.guideMap = guideMap;
-    }
-
+    private Set<String> blockedUsers = new HashSet<>();
     private Map<String, String> guideMap = new HashMap<>();
+
+    public int getServerPort() {
+        return serverPort;
+    }
+
+    public void setServerPort(int serverPort) {
+        this.serverPort = serverPort;
+    }
 
     public Set<String> getBlackHostSet() {
         return blackHostSet;
@@ -37,12 +37,20 @@ public class Configuration {
         this.blackHostSet = blackHostSet;
     }
 
-    public void setServerPort(int serverPort) {
-        this.serverPort = serverPort;
+    public Set<String> getBlockedUsers() {
+        return blockedUsers;
     }
 
-    public int getServerPort() {
-        return serverPort;
+    public void setBlockedUsers(Set<String> blockedUsers) {
+        this.blockedUsers = blockedUsers;
+    }
+
+    public Map<String, String> getGuideMap() {
+        return guideMap;
+    }
+
+    public void setGuideMap(Map<String, String> guideMap) {
+        this.guideMap = guideMap;
     }
 
     public static Configuration getInstance() {

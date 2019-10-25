@@ -1,1 +1,2 @@
+// 钓鱼网站列表，格式<源网站><空格><目的网站>
 today.hit.edu.cn news.hit.edu.cn

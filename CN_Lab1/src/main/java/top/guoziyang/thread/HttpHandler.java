@@ -22,6 +22,7 @@ public class HttpHandler implements Runnable {
     private Socket socketToServer;
     private int BUFSIZE = 1024;
 
+
     public HttpHandler(Socket socket) {
         this.socketToClient = socket;
     }
@@ -33,12 +34,14 @@ public class HttpHandler implements Runnable {
             OutputStream toClientWriter = socketToClient.getOutputStream();
             StringBuilder requestBuilder = new StringBuilder();
 
+            Configuration configuration = Configuration.getInstance();
+
             // 获取并解析客户端的请求头
             String line;
             String hostString = null;
             String url = null;
             while ((line = LineReader.readLine(toClientReader)) != null) {
-                if (line.startsWith("GET")) {
+                if (line.startsWith("GET") || line.startsWith("POST")) {
                     url = line.split(" ")[1];
                 }
                 if (line.startsWith("CONNECT")) {
@@ -68,25 +71,20 @@ public class HttpHandler implements Runnable {
             // 端口直接固定为80
             int port = 80;
 
-            Configuration configuration = Configuration.getInstance();
+            // 检查是否是418页面的资源请求
+            if(TeapotUtil.teapotResource(url, toClientWriter)) {
+                return;
+            }
 
-            // 418页面的资源请求
-            switch (url) {
-                case "http://teapot.min.css/":
-                    TeapotUtil.teapotCss(toClientWriter);
+
+            // 拦截不允许访问的用户
+            if(configuration.getBlockedUsers().contains(socketToClient.getInetAddress().getHostAddress())) {
+                if (url.contains("favicon.ico")) {
+                    TeapotUtil.faviconIco(toClientWriter);
                     return;
-                case "http://teapot.min.js/":
-                    TeapotUtil.teapotJs(toClientWriter);
-                    return;
-                case "http://teapot.png/":
-                    TeapotUtil.teapotPng(toClientWriter);
-                    return;
-                case "http://logo.png/":
-                    TeapotUtil.teapotLogo(toClientWriter);
-                    return;
-                case "http://analytics.js/":
-                    TeapotUtil.analyticsJs(toClientWriter);
-                    return;
+                }
+                TeapotUtil.error418(toClientWriter, "未允许的用户访问");
+                return;
             }
 
             // 拦截不允许访问的host
@@ -95,7 +93,7 @@ public class HttpHandler implements Runnable {
                     TeapotUtil.faviconIco(toClientWriter);
                     return;
                 }
-                TeapotUtil.error418(toClientWriter);
+                TeapotUtil.error418(toClientWriter, "未允许的网站访问");
                 return;
             }
 
@@ -180,6 +178,18 @@ public class HttpHandler implements Runnable {
 
         } catch (IOException ignored) {
             ;
+        } finally {
+            // 关闭socket
+            try {
+                if(socketToClient != null && !socketToClient.isClosed()) {
+                    socketToClient.close();
+                }
+                if(socketToServer != null && !socketToServer.isClosed()) {
+                    socketToServer.close();
+                }
+            } catch (IOException ignored) {
+                ;
+            }
         }
     }
 
