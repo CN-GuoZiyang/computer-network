@@ -17,6 +17,7 @@ public class Main {
         try {
             // 开启服务端Socket监听
             ServerSocket serverSocket = new ServerSocket(configuration.getServerPort());
+            System.out.println("监听端口：" + configuration.getServerPort());
             while(true) {
                 // 客户端连接后创建线程处理
                 Socket socket = serverSocket.accept();
