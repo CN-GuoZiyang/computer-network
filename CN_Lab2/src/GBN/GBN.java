@@ -9,22 +9,21 @@ import java.util.LinkedList;
 import java.util.List;
 
 /**
- * 可收发的SR协议实现
+ * 可收发的GBN协议实现
  * 
  * @author Ziyang Guo
  */
-public class SR {
+public class GBN {
     
     private InetAddress host;   // 目的主机地址
     private int targetPort; // 目的端口
     private int myPort;     // 本地端口
     private int windowSize = 16;    // 窗口大小
-    private int sendMaxTime = 2;    // 最大发送次数
-    private int receiveMaxTime = 4; // 最大接收次数
     private long base = 0;          // 窗口base序号
-    private int loss = 10;          // 模拟丢包
+    private int receiveMaxTime = 4;
+    private int loss = 10;
 
-    public SR(String host, int targetPort, int myPort) throws UnknownHostException {
+    public GBN(String host, int targetPort, int myPort) throws UnknownHostException {
         this.myPort = myPort;
         this.targetPort = targetPort;
         this.host = InetAddress.getByName(host);
@@ -51,12 +50,9 @@ public class SR {
                 datagramBuffer.add(new ByteArrayOutputStream());
                 length = Math.min(content.length - sendIndex, maxLength);
 
-                // 拼接数据帧，按照 base + seq + data 的顺序拼接
+                // 拼接数据帧，按照 seq + data 的顺序拼接
                 ByteArrayOutputStream one = new ByteArrayOutputStream();
                 byte[] temp = new byte[1];
-                temp[0] = new Long(base).byteValue();
-                one.write(temp, 0, 1);
-                temp = new byte[1];
                 temp[0] = new Long(sendSeq).byteValue();
                 one.write(temp, 0, 1);
                 one.write(content, sendIndex, length);
@@ -87,34 +83,25 @@ public class SR {
                     timers.set(ack, -1);
                 }
             } catch (SocketTimeoutException e) {
-                // socket超时，设置确认次数+1
+                // socket超时，重传所有未确认分组
                 for(int i = 0; i < timers.size(); i ++) {
                     int tempTime = timers.get(i);
                     if(tempTime != -1) {
-                        timers.set(i, tempTime + 1);
+                        ByteArrayOutputStream resender = new ByteArrayOutputStream();
+                        byte[] temp = new byte[1];
+                        temp[0] = new Long(i + base).byteValue();
+                        resender.write(temp, 0, 1);
+                        resender.write(datagramBuffer.get(i).toByteArray(), 0, datagramBuffer.get(i).size());
+                        DatagramPacket datagramPacket = new DatagramPacket(resender.toByteArray(), resender.size(), host, targetPort);
+                        datagramSocket.send(datagramPacket);
+                        System.err.println("重新发送数据包：base " + base + " seq " + (i + base));
+                        timers.set(i, 0);
                     }
-                }
-            }
-            // 重发所有超过最大确认次数的数据帧
-            for(int i = 0; i < timers.size(); i ++) {
-                if(timers.get(i) > sendMaxTime) {
-                    ByteArrayOutputStream resender = new ByteArrayOutputStream();
-                    byte[] temp = new byte[1];
-                    temp[0] = new Long(base).byteValue();
-                    resender.write(temp, 0, 1);
-                    temp = new byte[1];
-                    temp[0] = new Long(i + base).byteValue();
-                    resender.write(temp, 0, 1);
-                    resender.write(datagramBuffer.get(i).toByteArray(), 0, datagramBuffer.get(i).size());
-                    DatagramPacket datagramPacket = new DatagramPacket(resender.toByteArray(), resender.size(), host, targetPort);
-                    datagramSocket.send(datagramPacket);
-                    System.err.println("重新发送数据包：base " + base + " seq " + (i + base));
-                    timers.set(i, 0);
                 }
             }
             int i = 0;
             int s = timers.size();
-            // 确认并删除所有已经确认过的缓存
+            // 确认并删除所有已经确认过的缓存（窗口滑动）
             while(i < s) {
                 if(timers.get(i) == -1) {
                     timers.remove(i);
@@ -143,82 +130,48 @@ public class SR {
      * @throws IOException IO异常
      */
     public ByteArrayOutputStream receive() throws IOException {
-        int count = 0;  // 接收到的数据帧个数
-        int time = 0;   // 同一个数据帧的接收次数
-        long max = 0;   // 当前最大接收到的序列号 - base，乱序
-        long receiveBase = -1;  // 接收窗口的base
+        int time = 0;
+        int count = 0;
+        long receiveBase = 0;  // 期望接收到的分组
         ByteArrayOutputStream result = new ByteArrayOutputStream(); // 按序输出流
         DatagramSocket datagramSocket = new DatagramSocket(myPort); // server监听socket
-        datagramSocket.setSoTimeout(1000);
-        List<ByteArrayOutputStream> datagramBuffer = new LinkedList<>();    // 缓存窗口内接收到的数据帧
         DatagramPacket receivePacket;
-        
-        for(int i = 0; i < windowSize; i ++) {
-            datagramBuffer.add(new ByteArrayOutputStream());
-        }
 
+        datagramSocket.setSoTimeout(1000);
         while (true) {
+            count ++;
             try {
                 byte[] recv = new byte[1500];
                 receivePacket = new DatagramPacket(recv, recv.length, host, targetPort);
                 datagramSocket.receive(receivePacket);
-                // 模拟丢包，即接收之后不处理，当成没接收到
-                if(count % loss != 0) {
-                    // 提取出接收到的base和序列号
-                    long base = recv[0] & 0x0FF;
-                    long seq = recv[1] & 0x0FF;
-                    if(receiveBase == -1) {
-                        receiveBase = base;
-                    }
-                    // 若发送端base更新（即已经确认了几个数据帧）
-                    if(base != receiveBase) {
-                        // 从缓存中取出已经确认完成的数据帧拼接
-                        ByteArrayOutputStream temp = getBytes(datagramBuffer, (base - receiveBase) > 0 ? (base - receiveBase) : max + 1);
-                        // 空出缓存
-                        for(int i = 0; i < base - receiveBase; i ++) {
-                            datagramBuffer.remove(0);
-                            datagramBuffer.add(new ByteArrayOutputStream());
-                        }
-                        result.write(temp.toByteArray(), 0, temp.size());
-                        receiveBase = base;
-                        max -= (base - receiveBase);
-                    }
-                    if(seq - base > max) {
-                        max = seq - base;
-                    }
-                    // 将接收到的数据帧写入缓存
-                    ByteArrayOutputStream recvBytes = new ByteArrayOutputStream();
-                    recvBytes.write(recv, 2, receivePacket.getLength() - 2);
-                    datagramBuffer.set((int) (seq - base), recvBytes);
-                    // 返回ACK
-                    recv = new byte[1];
-                    recv[0] = new Long(seq).byteValue();
-                    receivePacket = new DatagramPacket(recv, recv.length, host, targetPort);
-                    datagramSocket.send(receivePacket);
-                    System.out.println("接收到数据包：base " + base + " seq " + seq);
+                
+                long seq = recv[0] & 0x0FF;
+                if(receiveBase != seq) {
+                    continue;
                 }
-                count ++;
+                if(count % loss == 0) {
+                    continue;
+                }
+
+                result.write(recv, 1, receivePacket.getLength() - 1);
+                receiveBase ++;
+
+                recv = new byte[1];
+                recv[0] = new Long(seq).byteValue();
+                receivePacket = new DatagramPacket(recv, recv.length, host, targetPort);
+                datagramSocket.send(receivePacket);
+                System.out.println("接收到数据包：seq " + seq);
+                
                 time = 0;
             } catch (SocketTimeoutException e) {
                 time ++;
             }
             // 超出最大接收时间，则接收结束，写出数据
             if(time > receiveMaxTime) {
-                ByteArrayOutputStream temp = getBytes(datagramBuffer, max + 1);
-                result.write(temp.toByteArray(), 0, temp.size());
                 break;
             }
         }
         datagramSocket.close();
-        return result;
-    }
-
-    private ByteArrayOutputStream getBytes(List<ByteArrayOutputStream> buffer, long max) {
-        ByteArrayOutputStream result = new ByteArrayOutputStream();
-        for (int i = 0; i < max; i++) {
-            if (buffer.get(i) != null)
-                result.write(buffer.get(i).toByteArray(), 0, buffer.get(i).size());
-        }
         return result;
     }
 
