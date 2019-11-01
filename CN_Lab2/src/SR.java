@@ -37,7 +37,7 @@ public class SR {
             while(timers.size() < windowSize && sendIndex < content.length && sendSeq < 256) {
                 timers.add(0);
                 datagramBuffer.add(new ByteArrayOutputStream());
-                length = content.length - sendIndex < maxLength ? content.length - sendIndex : maxLength;
+                length = Math.min(content.length - sendIndex, maxLength);
                 ByteArrayOutputStream one = new ByteArrayOutputStream();
                 byte[] temp = new byte[1];
                 temp[0] = new Long(base).byteValue();
@@ -117,7 +117,7 @@ public class SR {
         DatagramSocket datagramSocket = new DatagramSocket(myPort);
         datagramSocket.setSoTimeout(1000);
         List<ByteArrayOutputStream> datagramBuffer = new LinkedList<>();
-        DatagramPacket receivePacket = null;
+        DatagramPacket receivePacket;
         for(int i = 0; i < windowSize; i ++) {
             datagramBuffer.add(new ByteArrayOutputStream());
         }
@@ -152,7 +152,7 @@ public class SR {
                     recv[0] = new Long(seq).byteValue();
                     receivePacket = new DatagramPacket(recv, recv.length, host, targetPort);
                     datagramSocket.send(receivePacket);
-                    System.out.println("接收到数据包：base " + base + " seq " + seq);
+                    System.out.println("接收到数据包：base " + receiveBase + " seq " + seq);
                 }
                 count ++;
                 time = 0;
