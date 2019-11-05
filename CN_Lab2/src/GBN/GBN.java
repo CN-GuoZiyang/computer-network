@@ -20,7 +20,7 @@ public class GBN {
     private int myPort;     // 本地端口
     private int windowSize = 16;    // 窗口大小
     private long base = 0;          // 窗口base序号
-    private int receiveMaxTime = 4;
+    private int receiveMaxTime = 4; // 最大尝试接收次数
     private int loss = 10;
 
     public GBN(String host, int targetPort, int myPort) throws UnknownHostException {
@@ -83,7 +83,7 @@ public class GBN {
                     timers.set(ack, -1);
                 }
             } catch (SocketTimeoutException e) {
-                // socket超时，重传所有未确认分组
+                // 单个socket超时，重传所有未确认分组
                 for(int i = 0; i < timers.size(); i ++) {
                     int tempTime = timers.get(i);
                     if(tempTime != -1) {
@@ -146,9 +146,12 @@ public class GBN {
                 datagramSocket.receive(receivePacket);
                 
                 long seq = recv[0] & 0x0FF;
+                // 若不是期望接收的分组，则丢弃
                 if(receiveBase != seq) {
                     continue;
                 }
+
+                // 模拟丢包
                 if(count % loss == 0) {
                     continue;
                 }

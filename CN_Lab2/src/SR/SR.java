@@ -19,7 +19,6 @@ public class SR {
     private int targetPort; // 目的端口
     private int myPort;     // 本地端口
     private int windowSize = 16;    // 窗口大小
-    private int sendMaxTime = 2;    // 最大发送次数
     private int receiveMaxTime = 4; // 最大接收次数
     private long base = 0;          // 窗口base序号
     private int loss = 10;          // 模拟丢包
@@ -86,18 +85,10 @@ public class SR {
                     int ack = (int)((recv[0] & 0x0FF) - base);
                     timers.set(ack, -1);
                 }
-            } catch (SocketTimeoutException e) {
-                // socket超时，设置确认次数+1
-                for(int i = 0; i < timers.size(); i ++) {
-                    int tempTime = timers.get(i);
-                    if(tempTime != -1) {
-                        timers.set(i, tempTime + 1);
-                    }
-                }
-            }
+            } catch (SocketTimeoutException ignore) {}
             // 重发所有超过最大确认次数的数据帧
             for(int i = 0; i < timers.size(); i ++) {
-                if(timers.get(i) > sendMaxTime) {
+                if(timers.get(i) == 0) {
                     ByteArrayOutputStream resender = new ByteArrayOutputStream();
                     byte[] temp = new byte[1];
                     temp[0] = new Long(base).byteValue();
@@ -180,8 +171,8 @@ public class SR {
                             datagramBuffer.add(new ByteArrayOutputStream());
                         }
                         result.write(temp.toByteArray(), 0, temp.size());
-                        receiveBase = base;
                         max -= (base - receiveBase);
+                        receiveBase = base;
                     }
                     if(seq - base > max) {
                         max = seq - base;
