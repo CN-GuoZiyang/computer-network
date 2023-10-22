@@ -12,6 +12,7 @@ import java.util.List;
  * 可收发的SR协议实现
  * 
  * @author Ziyang Guo
+ * 修复bug:Zhichao Zhang
  */
 public class SR {
     
@@ -83,6 +84,7 @@ public class SR {
                     datagramSocket.receive(receivePacket);
                     // 取出ack的序列号
                     int ack = (int)((recv[0] & 0x0FF) - base);
+                    System.out.println("收到的ack"+ (ack + base));
                     timers.set(ack, -1);
                 }
             } catch (SocketTimeoutException ignore) {}
@@ -164,14 +166,17 @@ public class SR {
                     // 若发送端base更新（即已经确认了几个数据帧）
                     if(base != receiveBase) {
                         // 从缓存中取出已经确认完成的数据帧拼接
-                        ByteArrayOutputStream temp = getBytes(datagramBuffer, (base - receiveBase) > 0 ? (base - receiveBase) : max + 1);
+                        //需要考虑256 后 base变为0 的情况
+
+                        long l = (base - receiveBase) > 0 ? (base - receiveBase) : max + 1;
+                        ByteArrayOutputStream temp = getBytes(datagramBuffer, l);
                         // 空出缓存
-                        for(int i = 0; i < base - receiveBase; i ++) {
+                        for(int i = 0; i < l; i ++) {
                             datagramBuffer.remove(0);
                             datagramBuffer.add(new ByteArrayOutputStream());
                         }
                         result.write(temp.toByteArray(), 0, temp.size());
-                        max -= (base - receiveBase);
+                        max -= l;
                         receiveBase = base;
                     }
                     if(seq - base > max) {
