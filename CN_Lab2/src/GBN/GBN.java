@@ -12,6 +12,7 @@ import java.util.List;
  * 可收发的GBN协议实现
  * 
  * @author Ziyang Guo
+ * 修复bug:Zhichao Zhang
  */
 public class GBN {
     
@@ -164,7 +165,9 @@ public class GBN {
                 receivePacket = new DatagramPacket(recv, recv.length, host, targetPort);
                 datagramSocket.send(receivePacket);
                 System.out.println("接收到数据包：seq " + seq);
-                
+                if(receiveBase >= 256){
+                    receiveBase -=256;
+                }
                 time = 0;
             } catch (SocketTimeoutException e) {
                 time ++;
